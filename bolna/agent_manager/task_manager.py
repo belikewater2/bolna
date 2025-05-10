@@ -410,7 +410,7 @@ class TaskManager(BaseManager):
 
         # setting llm
         if self.llm_config is not None:
-            logger.info(f"LLM CONFIG IS NOT NONE {self.task_config['task_type']} llm agent config {self.llm_agent_config}")
+            logger.llm(f"LLM CONFIG IS NOT NONE {self.task_config['task_type']} llm agent config {self.llm_agent_config}")
             llm = self.__setup_llm(self.llm_config, task_id)
             #Setup tasks
             agent_params = {
@@ -579,7 +579,7 @@ class TaskManager(BaseManager):
     def __setup_transcriber(self):
         try:
             if self.task_config["tools_config"]["transcriber"] is not None:
-                logger.info("Setting up transcriber")
+                logger.trans("Setting up transcriber")
                 self.language = self.task_config["tools_config"]["transcriber"].get('language', DEFAULT_LANGUAGE_CODE)
                 if self.turn_based_conversation:
                     provider = "playground"
@@ -595,7 +595,7 @@ class TaskManager(BaseManager):
                 if self.task_config["tools_config"]["transcriber"]["model"] in SUPPORTED_TRANSCRIBER_MODELS.keys() or self.task_config["tools_config"]["transcriber"]["provider"] in SUPPORTED_TRANSCRIBER_PROVIDERS.keys():
                     if self.turn_based_conversation:
                         self.task_config["tools_config"]["transcriber"]["stream"] = True if self.enforce_streaming else False
-                        logger.info(f'self.task_config["tools_config"]["transcriber"]["stream"] {self.task_config["tools_config"]["transcriber"]["stream"]} self.enforce_streaming {self.enforce_streaming}')
+                        logger.trans(f'self.task_config["tools_config"]["transcriber"]["stream"] {self.task_config["tools_config"]["transcriber"]["stream"]} self.enforce_streaming {self.enforce_streaming}')
                     if 'provider' in self.task_config["tools_config"]["transcriber"]:
                         transcriber_class = SUPPORTED_TRANSCRIBER_PROVIDERS.get(
                             self.task_config["tools_config"]["transcriber"]["provider"])
@@ -607,7 +607,7 @@ class TaskManager(BaseManager):
             logger.error(f"Something went wrong with starting transcriber {e}")
 
     def __setup_synthesizer(self, llm_config=None):
-        logger.info(f"Synthesizer config: {self.task_config['tools_config']['synthesizer']}")
+        logger.synt(f"Synthesizer config: {self.task_config['tools_config']['synthesizer']}")
         if self._is_conversation_task():
             self.kwargs["use_turbo"] = self.task_config["tools_config"]["transcriber"]["language"] == DEFAULT_LANGUAGE_CODE
         if self.task_config["tools_config"]["synthesizer"] is not None:
@@ -632,10 +632,10 @@ class TaskManager(BaseManager):
 
     def __setup_llm(self, llm_config, task_id=0):
         if self.task_config["tools_config"]["llm_agent"] is not None:
-            logger.info(f'### PROVIDER {llm_config["provider"] }')
+            logger.llm(f'### PROVIDER {llm_config["provider"] }')
             if llm_config["provider"] in SUPPORTED_LLM_PROVIDERS.keys():
                 llm_class = SUPPORTED_LLM_PROVIDERS.get(llm_config["provider"])
-                logger.info(f"LLM CONFIG {llm_config}")
+                logger.llm(f"LLM CONFIG {llm_config}")
 
                 if task_id and task_id > 0:
                     self.kwargs.pop('llm_key', None)
@@ -652,13 +652,13 @@ class TaskManager(BaseManager):
     def __get_agent_object(self, llm, agent_type, assistant_config=None):
         self.agent_type = agent_type
         if agent_type == "simple_llm_agent":
-            logger.info(f"Simple llm agent")
+            logger.llm(f"Simple llm agent")
             llm_agent = StreamingContextualAgent(llm)
         elif agent_type == "openai_assistant":
-            logger.info(f"setting up backend as openai_assistants {assistant_config}")
+            logger.llm(f"setting up backend as openai_assistants {assistant_config}")
             llm_agent = OpenAIAssistantAgent(**assistant_config)
         elif agent_type == "knowledgebase_agent":
-            logger.info("Setting up knowledgebase_agent agent ####")
+            logger.llm("Setting up knowledgebase_agent agent ####")
             llm_config = self.task_config["tools_config"]["llm_agent"].get("llm_config", {})
             vector_store_config = llm_config.get("vector_store", {})
             llm_agent = RAGAgent(
@@ -668,14 +668,14 @@ class TaskManager(BaseManager):
                 max_tokens=self.llm_agent_config['llm_config']['max_tokens'],
                 provider_config=vector_store_config
             )
-            logger.info("Llama-index rag agent is created")
+            logger.llm("Llama-index rag agent is created")
         elif agent_type == "graph_agent":
-            logger.info("Setting up graph agent")
+            logger.llm("Setting up graph agent")
             llm_config = self.task_config["tools_config"]["llm_agent"].get("llm_config", {})
-            logger.info(f"Getting this llm config : {llm_config}")
+            logger.llm(f"Getting this llm config : {llm_config}")
             llm_agent = GraphAgent(llm_config)
-            logger.info(f"Graph agent is created")
-            logger.info("Knowledge Base Agent created")
+            logger.llm(f"Graph agent is created")
+            logger.llm("Knowledge Base Agent created")
         else:
             raise f"{agent_type} Agent type is not created yet"
         return llm_agent
@@ -1065,7 +1065,7 @@ class TaskManager(BaseManager):
     # LLM task
     ##############################################################
     async def _handle_llm_output(self, next_step, text_chunk, should_bypass_synth, meta_info, is_filler = False):
-        logger.info("received text from LLM for output processing: {} which belongs to sequence id {}".format(text_chunk, meta_info['sequence_id']))
+        logger.llm("received text from LLM for output processing: {} which belongs to sequence id {}".format(text_chunk, meta_info['sequence_id']))
         if "request_id" not in meta_info:
             meta_info["request_id"] = str(uuid.uuid4())
 
@@ -1084,7 +1084,7 @@ class TaskManager(BaseManager):
             }
             self.latency_dict[meta_info["request_id"]] = latency_metrics
         elif is_filler:
-            logger.info(f"It's a filler message and hence adding required metadata")
+            logger.llm(f"It's a filler message and hence adding required metadata")
             meta_info['origin'] = "classifier"
             meta_info['cached'] = True
             meta_info['local'] = True
@@ -1094,7 +1094,7 @@ class TaskManager(BaseManager):
             task = asyncio.create_task(self._synthesize(create_ws_data_packet(text_chunk, meta_info)))
             self.synthesizer_tasks.append(asyncio.ensure_future(task))
         elif self.tools["output"] is not None:
-            logger.info("Synthesizer not the next step and hence simply returning back")
+            logger.llm("Synthesizer not the next step and hence simply returning back")
             overall_time = time.time() - meta_info["llm_start_time"]
             self.latency_dict[meta_info["request_id"]]['overall_first_byte_latency'] = overall_time
             #self.history = copy.deepcopy(self.interim_history)
@@ -1281,11 +1281,11 @@ class TaskManager(BaseManager):
             synthesize = False
 
         async for llm_message in self.tools['llm_agent'].generate(messages, synthesize=synthesize, meta_info=meta_info):
-            logger.info(f"llm_message {llm_message}")
+            logger.llm(f"llm_message {llm_message}")
             data, end_of_llm_stream, latency, trigger_function_call, function_tool, function_tool_message = llm_message
 
             if trigger_function_call:
-                logger.info(f"Triggering function call for {data}")
+                logger.llm(f"Triggering function call for {data}")
                 self.llm_task = asyncio.create_task(self.__execute_function_call(next_step = next_step, **data))
                 return
 
@@ -1293,24 +1293,24 @@ class TaskManager(BaseManager):
                 meta_info["llm_latency"] = latency
                 self.llm_latencies.append(latency)
                 self.average_llm_latency = sum(self.llm_latencies) / len(self.llm_latencies)
-                logger.info(f"Got llm latencies {self.llm_latencies}")
+                logger.llm(f"Got llm latencies {self.llm_latencies}")
 
             llm_response += " " + data
 
-            logger.info(f"Got a response from LLM {llm_response}")
+            logger.llm(f"Got a response from LLM {llm_response}")
             if end_of_llm_stream:
                 meta_info["end_of_llm_stream"] = True
 
             if self.stream:
                 text_chunk = self.__process_stop_words(data, meta_info)
-                logger.info(f"##### O/P from LLM {text_chunk} {llm_response}")
+                logger.llm(f"##### O/P from LLM {text_chunk} {llm_response}")
 
                 # A hack as during the 'await' part control passes to llm streaming function parameters
                 # So we have to make sure we've commited the filler message
                 filler_message = compute_function_pre_call_message(self.language, function_tool, function_tool_message)
                 #filler_message = PRE_FUNCTION_CALL_MESSAGE.get(self.language, PRE_FUNCTION_CALL_MESSAGE[DEFAULT_LANGUAGE_CODE])
                 if text_chunk == filler_message:
-                    logger.info("Got a pre function call message")
+                    logger.llm("Got a pre function call message")
                     messages.append({'role':'assistant', 'content': filler_message})
                     self.history.append({'role': 'assistant', 'content': filler_message})
                     self.interim_history = copy.deepcopy(messages)
@@ -1326,7 +1326,7 @@ class TaskManager(BaseManager):
 
         filler_message = compute_function_pre_call_message(self.language, function_tool, function_tool_message)
         if self.stream and llm_response != filler_message:
-            logger.info(f"Storing {llm_response} into history should_trigger_function_call {should_trigger_function_call}")
+            logger.llm(f"Storing {llm_response} into history should_trigger_function_call {should_trigger_function_call}")
             self.__store_into_history(meta_info, messages, llm_response, should_trigger_function_call= should_trigger_function_call)
 
     async def _process_conversation_task(self, message, sequence, meta_info):
@@ -1434,7 +1434,7 @@ class TaskManager(BaseManager):
         while True:
             try:
                 ws_data_packet = await self.queues["llm"].get()
-                logger.info(f"ws_data_packet {ws_data_packet}")
+                logger.llm(f"ws_data_packet {ws_data_packet}")
                 meta_info = self.__get_updated_meta_info(ws_data_packet['meta_info'])
                 bos_packet = create_ws_data_packet("<beginning_of_stream>", meta_info)
                 await self.tools["output"].handle(bos_packet)
@@ -1454,7 +1454,7 @@ class TaskManager(BaseManager):
 
     async def _run_llm_task(self, message):
         sequence, meta_info = self._extract_sequence_and_meta(message)
-        logger.info(f"After adding {self.curr_sequence_id} into sequence id {self.sequence_ids} for message {message}")
+        logger.llm(f"After adding {self.curr_sequence_id} into sequence id {self.sequence_ids} for message {message}")
 
         try:
             if self._is_extraction_task() or self._is_summarization_task():
@@ -1462,9 +1462,9 @@ class TaskManager(BaseManager):
             elif self._is_conversation_task():
                 if self._is_preprocessed_flow():
                     if time.time() < self.consider_next_transcript_after:
-                        logger.info("Not considering transcript as we're still in cool down period")
+                        logger.llm("Not considering transcript as we're still in cool down period")
                         await asyncio.sleep(self.consider_next_transcript_after - time.time())
-                    logger.info(f"Running preprocessedf task")
+                    logger.llm(f"Running preprocessedf task")
                     await self._process_conversation_preprocessed_task(message, sequence, meta_info)
 
                 else:
@@ -1490,7 +1490,7 @@ class TaskManager(BaseManager):
         if self.previous_request_id is None:
             is_first_message = True
         elif self.previous_request_id not in self.llm_processed_request_ids:
-            logger.info(f"Adding previous request id to LLM rejected request if")
+            logger.trans(f"Adding previous request id to LLM rejected request if")
             self.llm_rejected_request_ids.add(self.previous_request_id)
         else:
             skip_append_to_data = False
@@ -1517,11 +1517,11 @@ class TaskManager(BaseManager):
 
     async def _listen_transcriber(self):
         temp_transcriber_message = ""
-        logger.info(f"Starting transcriber task")
+        logger.trans(f"Starting transcriber task")
         try:
             while True:
                 message = await self.transcriber_output_queue.get()
-                logger.info(f"Message from the transcriber class {message}")
+                logger.trans(f"Message from the transcriber class {message}")
 
                 # TODO whenever latency needs to be implemented we need to add the relevant code to the transcriber class
                 # if message['meta_info'] is not None and message['meta_info'].get('transcriber_latency', False):
@@ -1530,7 +1530,7 @@ class TaskManager(BaseManager):
 
                 if self.hangup_triggered:
                     if message["data"] == "transcriber_connection_closed":
-                        logger.info(f"Transcriber connection has been closed")
+                        logger.trans(f"Transcriber connection has been closed")
                         self.transcriber_duration += message.get("meta_info", {}).get("transcriber_duration", 0) if message['meta_info'] is not None else 0
                         break
                     continue
@@ -1545,14 +1545,14 @@ class TaskManager(BaseManager):
                     # Handling of transcriber events
                     if message["data"] == "speech_started":
                         if self.tools["input"].welcome_message_played():
-                            logger.info(f"User has started speaking")
+                            logger.trans(f"User has started speaking")
                             # self.callee_silent = False
 
                     # Whenever interim results would be received from Deepgram, this condition would get triggered
                     elif isinstance(message.get("data"), dict) and message["data"].get("type", "") == "interim_transcript_received":
                         self.time_since_last_spoken_human_word = time.time()
                         if temp_transcriber_message == message["data"].get("content"):
-                            logger.info("Received the same transcript as the previous one we have hence continuing")
+                            logger.trans("Received the same transcript as the previous one we have hence continuing")
                             continue
 
                         temp_transcriber_message = message["data"].get("content")
@@ -1570,17 +1570,17 @@ class TaskManager(BaseManager):
                         if self.tools["input"].welcome_message_played() and self.number_of_words_for_interruption != 0:
                             if interim_transcript_len > self.number_of_words_for_interruption or \
                                     message["data"].get("content").strip() in self.accidental_interruption_phrases:
-                                logger.info(f"Condition for interruption hit")
+                                logger.llm(f"Condition for interruption hit")
                                 self.turn_id += 1
                                 self.tools["input"].update_is_audio_being_played(False)
                                 await self.__cleanup_downstream_tasks()
 
                         # Doing changes for incremental delay
                         self.required_delay_before_speaking += self.incremental_delay
-                        logger.info(f"Increased the incremental delay time to {self.required_delay_before_speaking}")
+                        logger.llm(f"Increased the incremental delay time to {self.required_delay_before_speaking}")
                         if self.time_since_first_interim_result == -1:
                             self.time_since_first_interim_result = time.time() * 1000
-                            logger.info(f"Setting time for first interim result as {self.time_since_first_interim_result}")
+                            logger.llm(f"Setting time for first interim result as {self.time_since_first_interim_result}")
 
                         # self.callee_silent = False
                         # TODO check where this needs to be added post understanding it's usage
@@ -1589,11 +1589,11 @@ class TaskManager(BaseManager):
 
                     # Whenever speech_final or UtteranceEnd is received from Deepgram, this condition would get triggered
                     elif isinstance(message.get("data"), dict) and message["data"].get("type", "") == "transcript":
-                        logger.info(f"Received transcript, sending for further processing")
+                        logger.llm(f"Received transcript, sending for further processing")
                         if self.tools["input"].welcome_message_played() and self.tools["input"].is_audio_being_played_to_user() and \
                                 len(message["data"].get("content").strip().split(" ")) <= self.number_of_words_for_interruption and \
                                 message["data"].get("content").strip() not in self.accidental_interruption_phrases:
-                            logger.info(f"Continuing the loop and ignoring the transcript received ({message['data'].get('content')}) in speech final as it is false interruption")
+                            logger.llm(f"Continuing the loop and ignoring the transcript received ({message['data'].get('content')}) in speech final as it is false interruption")
                             continue
 
                         self.callee_speaking = False
@@ -1601,7 +1601,7 @@ class TaskManager(BaseManager):
                         temp_transcriber_message = ""
 
                         if self.output_task is None:
-                            logger.info(f"Output task was none and hence starting it")
+                            logger.llm(f"Output task was none and hence starting it")
                             self.output_task = asyncio.create_task(self.__process_output_loop())
 
                         # TODO remove this variable if we do not use the below condition
@@ -1621,14 +1621,14 @@ class TaskManager(BaseManager):
                         await self._handle_transcriber_output(next_task, transcriber_message, meta_info)
 
                     elif message["data"] == "transcriber_connection_closed":
-                        logger.info(f"Transcriber connection has been closed")
+                        logger.llm(f"Transcriber connection has been closed")
                         self.transcriber_duration += message.get("meta_info", {}).get("transcriber_duration", 0) if message["meta_info"] is not None else 0
                         break
 
                 else:
-                    logger.info(f"Processing http transcription for message {message}")
+                    logger.llm(f"Processing http transcription for message {message}")
                     if message["data"] == "transcriber_connection_closed":
-                        logger.info(f"Transcriber connection has been closed")
+                        logger.llm(f"Transcriber connection has been closed")
                         self.transcriber_duration += message.get("meta_info", {}).get("transcriber_duration", 0) if message["meta_info"] is not None else 0
                         break
 
@@ -1678,7 +1678,7 @@ class TaskManager(BaseManager):
     async def __listen_synthesizer(self):
         try:
             while not self.conversation_ended:
-                logger.info("Listening to synthesizer")
+                logger.synt("Listening to synthesizer")
                 try:
                     async for message in self.tools["synthesizer"].generate():
                         meta_info = message.get("meta_info", {})
@@ -1687,7 +1687,7 @@ class TaskManager(BaseManager):
 
                         # Check if the message is valid to process
                         if is_first_message or (not self.conversation_ended and sequence_id in self.sequence_ids):
-                            logger.info(f"Processing message with sequence_id: {sequence_id}")
+                            logger.synt(f"Processing message with sequence_id: {sequence_id}")
                             first_chunk_generation_timestamp = time.time()
                             meta_info["synthesizer_latency"] = first_chunk_generation_timestamp - meta_info.get(
                                 "synthesizer_start_time", 0)
@@ -1711,7 +1711,7 @@ class TaskManager(BaseManager):
                                     self.buffered_output_queue.put_nowait(message)
                             else:
                                 # Non-streaming output
-                                logger.info("Stream not enabled, sending entire audio")
+                                logger.synt("Stream not enabled, sending entire audio")
                                 self.latency_dict[meta_info["request_id"]]["synthesizer"] = {
                                     "synthesizer_first_chunk_latency": meta_info.get("synthesizer_first_chunk_latency",
                                                                                      0),
@@ -1731,23 +1731,23 @@ class TaskManager(BaseManager):
                                 run_id=self.run_id
                             )
                         else:
-                            logger.info(f"Skipping message with sequence_id: {sequence_id}")
+                            logger.synt(f"Skipping message with sequence_id: {sequence_id}")
 
                         # Give control to other tasks
                         await asyncio.sleep(0.2)
 
                 except asyncio.CancelledError:
-                    logger.info("Synthesizer task was cancelled.")
+                    logger.synt("Synthesizer task was cancelled.")
                     #await self.handle_cancellation("Synthesizer task was cancelled.")
                     break
                 except Exception as e:
                     logger.error(f"Error in synthesizer: {e}", exc_info=True)
                     break
 
-            logger.info("Exiting __listen_synthesizer gracefully.")
+            logger.synt("Exiting __listen_synthesizer gracefully.")
 
         except asyncio.CancelledError:
-            logger.info("Synthesizer task cancelled outside loop.")
+            logger.synt("Synthesizer task cancelled outside loop.")
             #await self.handle_cancellation("Synthesizer task was cancelled outside loop.")
         except Exception as e:
             logger.error(f"Unexpected error in __listen_synthesizer: {e}", exc_info=True)
@@ -1826,25 +1826,25 @@ class TaskManager(BaseManager):
         try:
             if not self.conversation_ended and ('is_first_message' in meta_info and meta_info['is_first_message'] or message["meta_info"]["sequence_id"] in self.sequence_ids):
                 if meta_info["is_md5_hash"]:
-                    logger.info('sending preprocessed audio response to {}'.format(self.task_config["tools_config"]["output"]["provider"]))
+                    logger.synt('sending preprocessed audio response to {}'.format(self.task_config["tools_config"]["output"]["provider"]))
                     await self.__send_preprocessed_audio(meta_info, text)
 
                 elif self.synthesizer_provider in SUPPORTED_SYNTHESIZER_MODELS.keys():
                     # self.sequence_ids.add(meta_info["sequence_id"])
                     # logger.info(f"After adding into sequence id {self.sequence_ids}")
                     convert_to_request_log(message = text, meta_info= meta_info, component="synthesizer", direction="request", model = self.synthesizer_provider, engine=self.tools['synthesizer'].get_engine(), run_id= self.run_id)
-                    logger.info('##### sending text to {} for generation: {} '.format(self.synthesizer_provider, text))
+                    logger.synt('##### sending text to {} for generation: {} '.format(self.synthesizer_provider, text))
                     if 'cached' in message['meta_info'] and meta_info['cached'] is True:
-                        logger.info(f"Cached response and hence sending preprocessed text")
+                        logger.synt(f"Cached response and hence sending preprocessed text")
                         convert_to_request_log(message = text, meta_info= meta_info, component="synthesizer", direction="response", model = self.synthesizer_provider, is_cached= True, engine=self.tools['synthesizer'].get_engine(), run_id= self.run_id)
                         await self.__send_preprocessed_audio(meta_info, get_md5_hash(text))
                     else:
                         self.synthesizer_characters += len(text)
                         await self.tools["synthesizer"].push(message)
                 else:
-                    logger.info("other synthesizer models not supported yet")
+                    logger.synt("other synthesizer models not supported yet")
             else:
-                logger.info(f"{message['meta_info']['sequence_id']} is not in sequence ids  {self.sequence_ids} and hence not synthesizing this")
+                logger.synt(f"{message['meta_info']['sequence_id']} is not in sequence ids  {self.sequence_ids} and hence not synthesizing this")
 
         except Exception as e:
             traceback.print_exc()
